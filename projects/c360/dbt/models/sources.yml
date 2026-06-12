@@ -1,0 +1,130 @@
+version: 2
+
+sources:
+
+  # ----------------------------------------------------------------
+  # RAW_DATA — source tables ingested from CRM, ERP, and Support
+  # ----------------------------------------------------------------
+  #
+  # SOURCE FRESHNESS — OI009 PREREQUISITE
+  # dbt source freshness requires a loaded_at_field on each source table.
+  # None of the RAW_DATA tables currently have an ETL ingestion timestamp.
+  # Once OI009 delivers LOADED_AT TIMESTAMP columns, activate the block below
+  # on each table and run: dbt source freshness --profiles-dir .
+  #
+  # Scaffold (uncomment after OI009):
+  #
+  #   loaded_at_field: LOADED_AT
+  #   freshness:
+  #     warn_after:  {count: 60, period: minute}
+  #     error_after: {count: 65, period: minute}
+  #
+  # Current operative freshness test: tests/freshness_mart_refreshed_within_65_minutes.sql
+  # That test checks CUSTOMER_360_MART.REFRESHED_AT as the freshness signal.
+  # ----------------------------------------------------------------
+  - name: raw_data
+    schema: RAW_DATA
+    description: "Source tables from three upstream systems. Join keys differ per BR002."
+
+    tables:
+
+      - name: crm_customers
+        identifier: CRM_CUSTOMERS
+        description: "Salesforce-style customer master. Spine of CUSTOMER_360 (BR001)."
+        columns:
+          - name: CUSTOMER_ID
+            description: "Primary key. Maps to ERP.CUST_ID and Support.CUSTOMER_REF (BR002)."
+            tests:
+              - not_null
+              - unique
+          - name: ACCOUNT_STATUS
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['active', 'at_risk', 'churned']
+
+      - name: erp_orders
+        identifier: ERP_ORDERS
+        description: "SAP-style order transactions. CUST_ID is the foreign key to CRM (BR002)."
+        columns:
+          - name: ORDER_ID
+            tests:
+              - not_null
+              - unique
+          - name: CUST_ID
+            tests:
+              - not_null
+          - name: ORDER_STATUS
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['delivered', 'cancelled']
+
+      - name: support_tickets
+        identifier: SUPPORT_TICKETS
+        description: "Zendesk-style tickets. CUSTOMER_REF is the foreign key to CRM (BR002)."
+        columns:
+          - name: TICKET_ID
+            tests:
+              - not_null
+              - unique
+          - name: CUSTOMER_REF
+            tests:
+              - not_null
+          - name: STATUS
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['open', 'resolved']
+          - name: PRIORITY
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['low', 'medium', 'high', 'critical']
+
+  # ----------------------------------------------------------------
+  # ANALYTICS — consumer-facing views and marts
+  # ----------------------------------------------------------------
+  - name: analytics
+    schema: ANALYTICS
+    description: "Analytics layer. Consumer-facing output of the Customer 360 pipeline."
+
+    tables:
+
+      - name: customer_360
+        identifier: CUSTOMER_360
+        description: >
+          Customer 360 view. Grain: one row per CRM customer (BR001).
+          CTE-based LEFT JOIN spine. 15 rows guaranteed.
+          Business rules: BR001–BR008, A001. Architecture: ADR001, ADR002.
+        columns:
+          - name: CUSTOMER_ID
+            description: "Primary key inherited from CRM spine (BR001, BR002)."
+            tests:
+              - not_null
+              - unique
+          - name: ACCOUNT_STATUS
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['active', 'at_risk', 'churned']
+          - name: TOTAL_ORDERS
+            description: "COALESCE'd to 0 — never NULL (BR003/BR004)."
+            tests:
+              - not_null
+          - name: TOTAL_TICKETS
+            description: "COALESCE'd to 0 — never NULL (BR004)."
+            tests:
+              - not_null
+          - name: AT_RISK_FLAG
+            description: "COALESCE'd to FALSE — never NULL (A001)."
+            tests:
+              - not_null
+          - name: HAS_OPEN_CRITICAL_TICKET
+            description: "COALESCE'd to FALSE — never NULL (A001 condition a)."
+            tests:
+              - not_null
+          - name: LOW_SATISFACTION_FLAG
+            description: "COALESCE'd to FALSE — never NULL (A001 condition c)."
+            tests:
+              - not_null

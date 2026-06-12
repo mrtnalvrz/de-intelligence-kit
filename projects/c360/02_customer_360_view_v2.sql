@@ -3,6 +3,7 @@
 -- Project: PROJ-C360
 -- Owner: Martin Alvarez
 -- Version: v2 — 2026-06-07
+-- BR006 revision — 2026-06-10: STATUS != 'open' → STATUS = 'resolved'
 --
 -- Changes from v1:
 --   BR007: order_details CTE now filters WHERE ORDER_STATUS = 'delivered'
@@ -139,9 +140,9 @@ support_metrics AS (
         AS BOOLEAN)                                                    AS HAS_OPEN_CRITICAL_TICKET,
         -- A001 condition (a): TRUE if any open + critical ticket exists
 
-        ROUND(AVG(CASE WHEN STATUS != 'open'
+        ROUND(AVG(CASE WHEN STATUS = 'resolved'
                        THEN SATISFACTION_SCORE END), 2)                AS AVG_SATISFACTION_SCORE,
-        -- BR006: closed tickets only — open tickets have no score yet
+        -- BR006 (revised 2026-06-10): resolved tickets only — STATUS = 'resolved'
         -- BR004: NULL if no closed tickets — not zero
         -- BR008: rounded to 2dp
         -- A001 condition (c): threshold < 3.0

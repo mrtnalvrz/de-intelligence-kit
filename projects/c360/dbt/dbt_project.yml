@@ -1,0 +1,40 @@
+name: mp_customer_360
+version: '1.0.0'
+config-version: 2
+
+profile: mp_demo
+
+model-paths:    ["models"]
+test-paths:     ["tests"]
+macro-paths:    ["macros"]
+snapshot-paths: ["snapshots"]
+seed-paths:     ["seeds"]
+
+target-path:  "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# ----------------------------------------------------------------
+# Refresh schedule: CUSTOMER_360_MART requires hourly refresh.
+# Freshness SLA: mart data must be no older than 65 minutes.
+#
+# Scheduler setup is outside dbt scope (infrastructure boundary).
+# See OI001 for status tracking.
+#
+# Windows Task Scheduler (current platform):
+#   Program : dbt
+#   Args    : run --select customer_360_mart --profiles-dir .
+#   Start in: G:\Projects\DE-Intelligence\dbt
+#   Trigger : Daily, repeat every 1 hour indefinitely
+#   On fail : notify martin.alvarez (alert: data freshness SLA at risk)
+#
+# cron (future platform — OI005 Redshift/Databricks migration):
+#   0 * * * * cd /path/to/dbt && dbt run --select customer_360_mart --profiles-dir .
+# ----------------------------------------------------------------
+
+models:
+  mp_customer_360:
+    +materialized: table
+    marts:
+      +materialized: table

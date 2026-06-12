@@ -1,0 +1,279 @@
+version: 2
+
+models:
+  - name: customer_360_mart
+    description: >
+      Materialized Customer 360 mart. Grain: one row per CRM customer (15 rows).
+      Full refresh materialization — rebuilt entirely from ANALYTICS.CUSTOMER_360
+      on each scheduled run. Freshness SLA: data no older than 65 minutes at any
+      point in time (1-hour refresh cycle + 5-minute processing buffer).
+      Primary production target for BI tools and downstream consumers.
+      Fallback: ANALYTICS.CUSTOMER_360 live view remains available (ADR003).
+      Business owner: Martin Alvarez. Business rules: BR001–BR008, A001.
+      Architecture decisions: ADR001, ADR002, ADR003.
+    meta:
+      owner: "Martin Alvarez"
+      refresh_cadence: "hourly"
+      freshness_sla_minutes: 65
+      fallback_object: "ANALYTICS.CUSTOMER_360"
+      incremental_blocked_by: "OI009 — LOADED_AT watermarks on RAW_DATA tables"
+
+    columns:
+
+      # ── Group 1: Customer Identity (15 columns) ─────────────────────────────
+
+      - name: CUSTOMER_ID
+        description: >
+          Unique customer identifier. Primary key inherited from CRM_CUSTOMERS.
+          Format C001–C015. Never NULL. Join key for all downstream lookups (BR001, BR002).
+        tests:
+          - not_null
+          - unique
+
+      - name: FIRST_NAME
+        description: "Customer's first name as recorded in Salesforce CRM."
+
+      - name: LAST_NAME
+        description: "Customer's last name as recorded in Salesforce CRM."
+
+      - name: EMAIL
+        description: >
+          [PII] Customer email address. Handle per data classification policy.
+          Do not expose in public-facing dashboards without masking.
+
+      - name: PHONE
+        description: >
+          [PII] Customer phone number. Handle per data classification policy.
+          Do not expose in public-facing dashboards without masking.
+
+      - name: COMPANY
+        description: "Company or organization name. Used as the primary display label for this customer."
+        tests:
+          - not_null
+
+      - name: INDUSTRY
+        description: >
+          Business sector the customer operates in. Values include: Agriculture, Energy,
+          Financial Services, Healthcare, Insurance, Logistics, Manufacturing, Media,
+          Retail, Technology. Used for portfolio segmentation.
+
+      - name: CITY
+        description: >
+          City of the customer's primary office. NULL for international customers
+          where no city is recorded in CRM — this is expected, not a data quality issue.
+
+      - name: STATE
+        description: >
+          State or province of the customer's primary office. NULL for international
+          customers — expected behavior, not missing data.
+
+      - name: COUNTRY
+        description: "Country of the customer's primary office."
+        tests:
+          - not_null
+
+      - name: SIGNUP_DATE
+        description: "Date the customer record was first created in the CRM system."
+        tests:
+          - not_null
+
+      - name: ACCOUNT_STATUS
+        description: >
+          Current CRM account health status. active: customer in good standing.
+          at_risk: flagged in Salesforce by the account team. churned: customer lost.
+          Note: this is the CRM classification, which may differ from AT_RISK_FLAG
+          (the data-derived risk signal in Group 6).
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'at_risk', 'churned']
+
+      - name: ANNUAL_REVENUE_USD
+        description: >
+          Customer's reported annual revenue in US dollars as recorded in CRM.
+          NULL if not provided. This is self-reported and should not be used
+          as a substitute for TOTAL_ORDER_VALUE_USD for pipeline calculations.
+
+      - name: SALES_REP
+        description: "Full name of the assigned sales representative as recorded in CRM."
+
+      - name: CUSTOMER_TENURE_DAYS
+        description: >
+          Number of days between SIGNUP_DATE and the timestamp of the last mart refresh
+          (REFRESHED_AT). Recalculated on every run — increases by ~1 per day automatically.
+          Used for cohort analysis and churn risk modelling.
+        tests:
+          - not_null
+
+      # ── Group 2: Order Metrics (7 columns) ──────────────────────────────────
+
+      - name: TOTAL_ORDERS
+        description: >
+          Total number of orders placed by this customer across all order statuses
+          (delivered and cancelled combined). Zero if no orders exist — never NULL (BR003).
+        tests:
+          - not_null
+
+      - name: DELIVERED_ORDERS
+        description: >
+          Number of orders with ORDER_STATUS = delivered. Zero if none.
+          Never NULL. Delivered orders contribute to TOTAL_ORDER_VALUE_USD (BR005).
+        tests:
+          - not_null
+
+      - name: CANCELLED_ORDERS
+        description: >
+          Number of orders with ORDER_STATUS = cancelled. Zero if none.
+          Never NULL. Cancelled revenue is excluded from all value metrics (BR005).
+        tests:
+          - not_null
+
+      - name: TOTAL_ORDER_VALUE_USD
+        description: >
+          Sum of TOTAL_AMOUNT_USD for delivered orders only. Cancelled order amounts
+          are excluded (BR005). NULL if the customer has no delivered orders —
+          NULL signals no revenue, not zero revenue.
+
+      - name: AVG_ORDER_VALUE_USD
+        description: >
+          Average value per delivered order in USD, rounded to 2 decimal places (BR008).
+          Excludes cancelled orders (BR005). NULL if no delivered orders.
+
+      - name: FIRST_ORDER_DATE
+        description: >
+          Date of the customer's earliest order regardless of status.
+          Useful for calculating order history length.
+
+      - name: LAST_ORDER_DATE
+        description: >
+          Date of the customer's most recent order regardless of status.
+          Note: this includes cancelled orders. Use MOST_RECENT_ORDER_DATE
+          (Group 3) if you specifically need the last delivered order date.
+
+      # ── Group 3: Order Details (3 columns) ──────────────────────────────────
+
+      - name: MOST_RECENT_ORDER_DATE
+        description: >
+          Order date of the most recently delivered order. NULL if the customer
+          has no delivered orders (BR007). Cancelled orders are excluded —
+          a cancelled order represents intent, not fulfillment.
+
+      - name: MOST_RECENT_PRODUCT
+        description: >
+          Product name from the most recently delivered order. NULL if no delivered
+          orders (BR007). Useful for product affinity and upsell signals.
+
+      - name: MOST_RECENT_ORDER_VALUE_USD
+        description: >
+          Total amount of the most recently delivered order in USD. NULL if no
+          delivered orders (BR007).
+
+      # ── Group 4: Support Metrics (7 columns) ────────────────────────────────
+
+      - name: TOTAL_TICKETS
+        description: >
+          Total support tickets raised by this customer across all statuses.
+          Zero if no tickets. Never NULL (BR004).
+        tests:
+          - not_null
+
+      - name: OPEN_TICKETS
+        description: >
+          Number of tickets currently in STATUS = open. Zero if none.
+          Never NULL. More than 2 open tickets triggers AT_RISK_FLAG (A001 condition b).
+        tests:
+          - not_null
+
+      - name: CRITICAL_TICKETS
+        description: >
+          Number of tickets with PRIORITY = critical across all statuses (open and resolved).
+          Zero if none. Never NULL.
+        tests:
+          - not_null
+
+      - name: HAS_OPEN_CRITICAL_TICKET
+        description: >
+          TRUE if the customer currently has at least one ticket that is simultaneously
+          open AND critical priority. FALSE otherwise. Never NULL.
+          Directly triggers AT_RISK_FLAG (A001 condition a). The highest-urgency
+          at-risk signal — C013 BankWest has been flagged via this field since 2023-03-20.
+        tests:
+          - not_null
+
+      - name: AVG_SATISFACTION_SCORE
+        description: >
+          Average customer satisfaction (CSAT) score across resolved tickets only,
+          rounded to 2 decimal places (BR006, BR008). Scores range from 1 (very
+          dissatisfied) to 5 (very satisfied). NULL if no resolved tickets exist —
+          NULL means no data, NOT a score of zero (BR004). A score below 3.0
+          triggers AT_RISK_FLAG (A001 condition c). C007 Logistix has NULL here
+          by design — their only ticket is still open.
+
+      - name: AVG_RESOLUTION_TIME_HRS
+        description: >
+          Average hours elapsed from CREATED_AT to RESOLVED_AT across all tickets
+          that have a resolution time recorded. NULL if no tickets.
+          Support health metric — customers with slow resolution times
+          often have different churn risk profiles (ADR002).
+
+      - name: FIRST_TICKET_DATE
+        description: "Timestamp of the customer's earliest support ticket. NULL if no tickets."
+
+      # ── Group 5: Support Details (3 columns) ────────────────────────────────
+
+      - name: MOST_RECENT_TICKET_DATE
+        description: >
+          Timestamp of the customer's most recent support ticket regardless of status.
+          NULL if no tickets.
+
+      - name: MOST_RECENT_TICKET_CATEGORY
+        description: >
+          Category of the most recent support ticket (e.g., Billing, Technical, Security,
+          General). NULL if no tickets.
+
+      - name: MOST_RECENT_TICKET_STATUS
+        description: >
+          Status of the most recent support ticket: open or resolved.
+          NULL if no tickets. Use this with MOST_RECENT_TICKET_DATE to assess
+          whether the customer's latest interaction was positive or unresolved.
+
+      # ── Group 6: Risk Indicators (3 columns) ────────────────────────────────
+
+      - name: AT_RISK_FLAG
+        description: >
+          TRUE if any of the three at-risk conditions from A001 fires:
+          (a) HAS_OPEN_CRITICAL_TICKET = TRUE, (b) OPEN_TICKETS > 2,
+          (c) AVG_SATISFACTION_SCORE < 3.0. FALSE otherwise. Never NULL.
+          Primary input for account management escalations. Check RISK_REASON
+          for the specific condition(s) that fired.
+        tests:
+          - not_null
+
+      - name: RISK_REASON
+        description: >
+          Plain-language description of which at-risk condition(s) fired. NULL if
+          AT_RISK_FLAG = FALSE. When multiple conditions fire, they are concatenated
+          with ' | ' as a separator (e.g., 'Open critical ticket | Low satisfaction score').
+          Possible values: 'Open critical ticket', 'High open ticket volume',
+          'Low satisfaction score', or combinations thereof.
+
+      - name: LOW_SATISFACTION_FLAG
+        description: >
+          TRUE if AVG_SATISFACTION_SCORE < 3.0 (A001 condition c standalone).
+          FALSE otherwise. Never NULL. Equivalent to condition (c) of AT_RISK_FLAG
+          but surfaced as a standalone field for satisfaction-focused reporting
+          and filtering without requiring AT_RISK_FLAG awareness.
+        tests:
+          - not_null
+
+      # ── Group 7: Mart Metadata (1 column) ───────────────────────────────────
+
+      - name: REFRESHED_AT
+        description: >
+          Timestamp captured at the moment this mart table was built (CURRENT_TIMESTAMP
+          at dbt run time). All 15 rows in the mart share the same REFRESHED_AT value
+          from a single run. Used to verify the freshness SLA: this value must be
+          within 65 minutes of the current query time. If it is older, the scheduled
+          refresh job has failed to run and the data should be treated as stale.
+        tests:
+          - not_null

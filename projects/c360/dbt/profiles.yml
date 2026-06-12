@@ -1,0 +1,11 @@
+# Run dbt commands with: dbt test --profiles-dir .
+# Or set env var: $env:DBT_PROFILES_DIR = "G:\Projects\DE-Intelligence\dbt"
+
+mp_demo:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'G:/Projects/DE-Intelligence/mp_demo.db'
+      threads: 1
+      schema: analytics
