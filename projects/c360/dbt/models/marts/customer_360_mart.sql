@@ -29,9 +29,9 @@
 
 select
     /*
-     * All 38 fields from ANALYTICS.CUSTOMER_360.
+     * All 39 fields from ANALYTICS.CUSTOMER_360 (v3).
      * Logic is owned by the view — this model materializes its output.
-     * See 02_customer_360_view_v2.sql for CTE details and business rule annotations.
+     * See 02_customer_360_view_v3.sql for CTE details and business rule annotations.
      */
     customer_id,
     first_name,
@@ -76,6 +76,7 @@ select
     at_risk_flag,
     risk_reason,
     low_satisfaction_flag,
+    high_value_flag,               -- BR011: concentration risk (>15% portfolio)
 
     -- Mart metadata: populated at refresh time, used for freshness SLA monitoring
     current_timestamp as refreshed_at

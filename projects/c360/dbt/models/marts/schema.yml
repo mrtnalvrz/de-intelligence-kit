@@ -266,6 +266,20 @@ models:
         tests:
           - not_null
 
+      - name: HIGH_VALUE_FLAG
+        description: >
+          TRUE if this customer's TOTAL_ORDER_VALUE_USD exceeds 15% of the total
+          portfolio value across all customers (BR011). Concentration risk signal —
+          a customer representing more than 15% of revenue creates outsized dependency.
+          FALSE otherwise. Never NULL. Threshold defined in high_value_threshold CTE
+          (single change point). Approved: Martin Alvarez, 2026-06-13.
+          Known high-value customers at implementation: C013 BankWest (23.0%),
+          C004 FinServ Corp (15.6%), C010 InsureNet (15.3%).
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]
+
       # ── Group 7: Mart Metadata (1 column) ───────────────────────────────────
 
       - name: REFRESHED_AT
