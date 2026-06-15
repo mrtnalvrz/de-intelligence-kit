@@ -1,0 +1,313 @@
+# ================================================================
+# DEMO_REGISTRY.md — Session Entry
+# Session: DEMO3 | Project: PROJ-C360 | Dates: 2026-06-13 / 2026-06-14
+# ================================================================
+
+- session_id: DEMO3
+  project_id: PROJ-C360
+  date_start: 2026-06-13
+  date_close: 2026-06-14
+  type: claude_code_cli_session
+  status: complete
+  operator: "Claude (claude-sonnet-4-6) via Claude Code CLI — invoked: Get-Content DEMO3_SESSION_PRIMER.md | claude"
+  database: 'G:\Projects\DE-Intelligence\mp_demo.db'
+  commit: "76e1249 — pushed to origin/main 2026-06-14"
+
+  operating_model:
+    interface: "Claude Code CLI on Windows (claude.ai/code)"
+    sql_execution: >
+      Autonomous via DuckDB CLI file execution (duckdb mp_demo.db < file.sql).
+      mcp-server-duckdb was specified in DEMO3_SESSION_PRIMER.md as the expected
+      mechanism but was not available this session — Bash tool used as fallback.
+    dbt_execution: >
+      dbt commands executed via Claude Code on Windows (PowerShell and/or Bash tool).
+      Some environment errors were encountered during the session — see session
+      transcript for detail.
+    ddl_approval: "required — obtained explicitly for all ALTER TABLE statements and DROP TABLE"
+    output_format: "dual-language (engineering + business) on all significant findings"
+    session_primer: DEMO3_SESSION_PRIMER.md
+    dbt_environment:
+      python: "3.13.9"
+      dbt_core: "1.11.11"
+      dbt_duckdb: "1.10.1"
+      duckdb: "v1.5.3"
+      dbt_utils: "1.3.3"
+      install_note: >
+        dbt-duckdb re-installed via pip into Python 3.13.9 this session.
+        dbt deps also required to install dbt_utils 1.3.3 before the test
+        suite could run.
+
+  # ──────────────────────────────────────────────────────────────
+  # PHASE 0 — Session Start State (from DEMO3_SESSION_PRIMER.md)
+  # ──────────────────────────────────────────────────────────────
+  phase_0_start_state:
+    view: "ANALYTICS.CUSTOMER_360 (v2, 38 cols, 6 CTEs)"
+    mart: "ANALYTICS.CUSTOMER_360_MART (39 cols — uppercase BASE TABLE, Demo 2 artifact)"
+    dbt_tests_inherited: 61
+    dbt_tests_passing: 60
+    dbt_tests_expected_fail: 1
+    expected_fail_reason: >
+      freshness_mart_refreshed_within_65_minutes — mart last refreshed
+      2026-06-10, no scheduler configured.
+    open_items_entering_session: ["OI003", "OI004", "OI005", "OI006", "OI007", "OI008", "OI009"]
+    test_count_note: >
+      Demo 2 delivered 36 tests. Demo 3 opened with 61 — dbt-core 1.11.11 counts
+      source-layer not_null generic tests differently than the Demo 2 version,
+      accounting for the difference.
+    benchmarks_revalidated:
+      total_rows: 15
+      at_risk_count: 2
+      portfolio_value: 1986450.00
+      null_csat_count: 1
+
+  # ──────────────────────────────────────────────────────────────
+  # WORK COMPLETED — OI009: ETL Watermarks
+  # ──────────────────────────────────────────────────────────────
+  oi009_etl_watermarks:
+    status: CLOSED
+    closed: 2026-06-13
+    ddl_approved_by: "Martin Alvarez (explicit batch approval, 2026-06-13)"
+    ddl_executed:
+      - "ALTER TABLE RAW_DATA.CRM_CUSTOMERS ADD COLUMN LOADED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"
+      - "ALTER TABLE RAW_DATA.ERP_ORDERS ADD COLUMN LOADED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"
+      - "ALTER TABLE RAW_DATA.SUPPORT_TICKETS ADD COLUMN LOADED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP;"
+    rows_backfilled:
+      CRM_CUSTOMERS: 15
+      ERP_ORDERS: 30
+      SUPPORT_TICKETS: 25
+    backfill_value: "ALTER TABLE execution timestamp (not original ingestion time)"
+    platform_divergence_note: >
+      DuckDB (and Oracle, Snowflake) backfill existing rows automatically on
+      ALTER ADD COLUMN DEFAULT. Redshift and Aurora PostgreSQL set NULL for
+      existing rows and require a post-ALTER UPDATE pass for equivalent behavior.
+      Documented for OI005 platform migration reference.
+    unblocks: ["OI001_true_incremental", "OI005"]
+
+  # ──────────────────────────────────────────────────────────────
+  # OPEN ITEM REGISTERED — OI010: ETL Update Watermark
+  # ──────────────────────────────────────────────────────────────
+  oi010_etl_update_watermark:
+    status: OPEN
+    opened: 2026-06-13
+    priority: HIGH
+    blocks: ["OI001_true_incremental", "OI005"]
+    description: >
+      ETL pipeline must explicitly SET LOADED_AT = CURRENT_TIMESTAMP on every
+      UPDATE, not just INSERT. LOADED_AT DEFAULT CURRENT_TIMESTAMP fires on
+      INSERT only — an UPDATE leaves LOADED_AT at the original insert time,
+      making changed records invisible to any watermark-based incremental strategy.
+    action_required: "ETL owner coordination — out of scope for schema DDL work"
+
+  # ──────────────────────────────────────────────────────────────
+  # WORK COMPLETED — OI006/BR011: HIGH_VALUE_FLAG
+  # ──────────────────────────────────────────────────────────────
+  oi006_high_value_flag:
+    status: CLOSED
+    closed: 2026-06-14
+    ddl_required: false
+    approved_by: "Martin Alvarez (explicit approval, 2026-06-13)"
+    business_rule: BR011
+    br011_statement: >
+      HIGH_VALUE_FLAG = TRUE when a customer's TOTAL_ORDER_VALUE_USD exceeds 15%
+      of total portfolio value (SUM of TOTAL_ORDER_VALUE_USD across all customers).
+      Concentration-risk signal. Threshold is a named constant (0.15) in the
+      high_value_threshold CTE — single change point for future revisions.
+    implementation:
+      view_version: v3
+      view_columns: 39
+      view_ctes: 8
+      new_ctes:
+        - name: portfolio_total
+          role: "Scalar aggregate — SUM(TOTAL_ORDER_VALUE_USD). BR011 denominator. One-row output."
+        - name: high_value_threshold
+          role: "Named constant — SELECT 0.15 AS THRESHOLD_PCT. Single change point."
+      high_value_flag_location: "Group 6: Risk Indicators (expanded from 3 to 4 fields)"
+      join_pattern: "CROSS JOIN portfolio_total pt / CROSS JOIN high_value_threshold hvt"
+      mart_columns: 40
+      mart_schema: "analytics.customer_360_mart (lowercase — see side_effect_case_mismatch)"
+      files_added:
+        - "projects/c360/02_customer_360_view_v3.sql"
+        - "projects/c360/dbt/tests/br011_known_high_value_customer.sql"
+      files_updated:
+        - "projects/c360/dbt/models/marts/customer_360_mart.sql"
+        - "projects/c360/dbt/models/marts/schema.yml"
+    known_high_value_customers:
+      - id: C013
+        company: BankWest
+        total_order_value_usd: 457650.00
+        portfolio_pct: 23.0
+        anticipated: true
+      - id: C004
+        company: FinServ Corp
+        total_order_value_usd: 309200.00
+        portfolio_pct: 15.6
+        anticipated: false
+        note: "Discovered via V4 verification query — not anticipated before implementation"
+      - id: C010
+        company: InsureNet
+        total_order_value_usd: 304300.00
+        portfolio_pct: 15.3
+        anticipated: false
+        note: "Discovered via V4 query — also has open high-priority billing ticket TKT-5020"
+    threshold_stability: >
+      Drop-off to C005 HealthSys at 8.1% is steep. Minor data shifts will not
+      accidentally produce a fourth high-value customer.
+    c010_observation: >
+      C010 InsureNet: HIGH_VALUE_FLAG = TRUE AND open high-priority ticket TKT-5020.
+      Does not currently cross AT_RISK_FLAG (ticket not critical, open count = 1,
+      no resolved tickets for CSAT). No new business rule needed — periodic review
+      recommended if TKT-5020 escalates or CSAT data accumulates.
+
+  # ──────────────────────────────────────────────────────────────
+  # SIDE-EFFECT FINDING — CUSTOMER_360_MART case-mismatch fix
+  # ──────────────────────────────────────────────────────────────
+  side_effect_case_mismatch:
+    finding: >
+      ANALYTICS.CUSTOMER_360_MART was originally created in Demo 2 as an uppercase
+      BASE TABLE. dbt targets lowercase schema/table names by default. DuckDB's
+      quoted-identifier handling treats these as distinct names, causing a
+      Compilation Error when dbt attempted to rebuild the mart during OI006 work.
+    resolution: >
+      DROP TABLE ANALYTICS.CUSTOMER_360_MART (approved Martin Alvarez, 2026-06-14),
+      followed immediately by dbt run --select customer_360_mart which recreated the
+      table as analytics.customer_360_mart (lowercase, 40 cols). Zero data gap —
+      dbt creates the table atomically. ANALYTICS.CUSTOMER_360 view was untouched.
+    post_fix_state:
+      table_schema: ANALYTICS
+      table_name: customer_360_mart
+      col_count: 40
+    oi005_platform_note: >
+      Snowflake folds unquoted identifiers to uppercase by default; Redshift and
+      PostgreSQL to lowercase; Oracle to uppercase. When executing OI005 platform
+      migration, validate that dbt schema/table name casing aligns with the target
+      platform's identifier behavior to avoid the same mismatch.
+
+  # ──────────────────────────────────────────────────────────────
+  # dbt TEST RESULTS — END OF DEMO 3
+  # ──────────────────────────────────────────────────────────────
+  dbt_test_results:
+    total_tests: 64
+    passed: 64
+    failed: 0
+    errors: 0
+    freshness_test: PASS
+    freshness_note: >
+      freshness_mart_refreshed_within_65_minutes passed because the mart was
+      rebuilt during this session (2026-06-14 11:50:15-07). Will fail again
+      between scheduled refreshes until a scheduler is configured.
+    tests_added_this_session: 3
+    new_tests:
+      - not_null_customer_360_mart_HIGH_VALUE_FLAG
+      - accepted_values_customer_360_mart_HIGH_VALUE_FLAG__True__False
+      - br011_known_high_value_customer
+
+  # ──────────────────────────────────────────────────────────────
+  # BUSINESS RULE CHANGES
+  # ──────────────────────────────────────────────────────────────
+  business_rule_changes:
+    - rule_id: BR011
+      change_type: new
+      date: 2026-06-13
+      statement: >
+        HIGH_VALUE_FLAG = TRUE when TOTAL_ORDER_VALUE_USD > 15% of total portfolio
+        value across all customers. Concentration-risk signal for account management.
+      decision_maker: Martin Alvarez
+      files_added:
+        - projects/c360/02_customer_360_view_v3.sql
+        - projects/c360/dbt/tests/br011_known_high_value_customer.sql
+      files_updated:
+        - projects/c360/dbt/models/marts/customer_360_mart.sql
+        - projects/c360/dbt/models/marts/schema.yml
+
+  # ──────────────────────────────────────────────────────────────
+  # OPEN ITEMS — STATE AS OF END OF DEMO 3
+  # ──────────────────────────────────────────────────────────────
+  open_items_registry:
+    - id: OI001
+      status: CLOSED
+      closed: 2026-06-10
+
+    - id: OI002
+      status: CLOSED
+      closed: 2026-06-10
+
+    - id: OI003
+      priority: MEDIUM
+      status: OPEN
+      description: "Great Expectations suite for RAW_DATA source layer"
+
+    - id: OI004
+      priority: LOW
+      status: OPEN
+      description: "SCD Type 2 history tracking for AT_RISK_FLAG"
+
+    - id: OI005
+      priority: LOW
+      status: OPEN
+      blocked_by: OI010
+      description: >
+        Adapt pipeline for second platform (Oracle, Aurora PostgreSQL, Snowflake, Redshift).
+        OI009 LOADED_AT DDL complete. OI010 (ETL update watermark) now primary blocker.
+
+    - id: OI006
+      priority: MEDIUM
+      status: CLOSED
+      closed: 2026-06-14
+      description: "HIGH_VALUE_FLAG for portfolio concentration"
+      resolution: >
+        BR011 implemented. View v3 (39 cols). Mart rebuilt (40 cols, lowercase).
+        64/64 dbt tests pass. Three customers flagged: C013 (23.0%), C004 (15.6%),
+        C010 (15.3%).
+
+    - id: OI007
+      priority: LOW
+      status: OPEN
+      description: "ACCOUNT_STATUS filter guidance for BI layer"
+
+    - id: OI008
+      priority: MEDIUM
+      status: OPEN
+      description: >
+        Add multi-condition at-risk test customer to validate RISK_REASON
+        concatenation. Current at-risk customers each fire only a single condition.
+
+    - id: OI009
+      priority: HIGH
+      status: CLOSED
+      closed: 2026-06-13
+
+    - id: OI010
+      priority: HIGH
+      status: OPEN
+      opened: 2026-06-13
+      blocks: ["OI001_true_incremental", "OI005"]
+      description: >
+        ETL pipeline must SET LOADED_AT = CURRENT_TIMESTAMP on every UPDATE.
+        Coordination item for ETL owner — out of scope for schema DDL work.
+
+  # ──────────────────────────────────────────────────────────────
+  # NEXT SESSION RECOMMENDATIONS
+  # ──────────────────────────────────────────────────────────────
+  next_session:
+    recommended_first: OI008
+    rationale: >
+      OI006 closed this session. OI008 (multi-condition at-risk test customer)
+      validates RISK_REASON concatenation logic currently untested for the
+      compound-condition case. No DDL required.
+    alternative_first: OI003
+    alternative_rationale: >
+      Great Expectations suite for RAW_DATA source layer — adds freshness, volume,
+      and referential integrity expectations alongside the dbt test suite.
+    start_prompt: >
+      Resume PROJ-C360. OI001, OI002, OI006, OI009 closed. Open: OI003-OI005,
+      OI007-OI008, OI010. OI008 (multi-condition at-risk test customer) recommended
+      next — no DDL, pure test work. OI010 (ETL update watermark) is ETL coordination
+      — external dependency. Database: G:\Projects\DE-Intelligence\mp_demo.db.
+      View: ANALYTICS.CUSTOMER_360 (v3, 39 cols). Mart: analytics.customer_360_mart
+      (40 cols, lowercase). LOADED_AT on all three RAW_DATA tables as of 2026-06-13.
+      dbt: G:\Projects\DE-Intelligence\dbt\ (64 tests, 64 pass). dbt environment:
+      Python 3.13.9, dbt-core 1.11.11, dbt-duckdb 1.10.1, DuckDB v1.5.3.
+      BR001-BR011 registered. BR006 revised 2026-06-10. ADR001-ADR003 accepted.
+      Benchmarks: 15 rows, 2 at-risk, $1,986,450 portfolio, C007 null satisfaction.
+      HIGH_VALUE_FLAG: C013 BankWest (23.0%), C004 FinServ Corp (15.6%), C010
+      InsureNet (15.3%).
