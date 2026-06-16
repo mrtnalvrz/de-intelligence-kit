@@ -8,4 +8,4 @@ mp_demo:
       type: duckdb
       path: 'G:/Projects/DE-Intelligence/mp_demo.db'
       threads: 1
-      schema: analytics
+      schema: ANALYTICS
