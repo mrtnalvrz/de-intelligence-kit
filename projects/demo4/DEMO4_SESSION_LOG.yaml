@@ -1,0 +1,208 @@
+# ================================================================
+# DEMO4_SESSION_LOG.yaml — Backfilled 2026-06-16 (post-session)
+# Session: DEMO4 | Project: PROJ-C360 | Date: 2026-06-16
+#
+# NOTE: This log was created retroactively to backfill the
+# projects/demo4/ continuity-bridge folder, which was not created
+# at the time of the Demo 4 session itself (the projects/demoN/
+# convention was followed for Demo 2 and Demo 3 but skipped for
+# Demo 4 — see the corresponding process note logged in
+# framework/PROJECT_REGISTRY.md). Content below is reconstructed
+# from the Demo 4 close-out summary as reported to the master
+# roadmap chat, not generated live during the session itself.
+# ================================================================
+
+session_id: DEMO4
+project_id: PROJ-C360
+date: 2026-06-16
+type: autonomous_cli_execution_with_chat_governance
+status: complete
+operator: "Claude Code (autonomous shell + MCP) — governed via claude.ai chat review"
+database: 'G:\Projects\DE-Intelligence\mp_demo.db'
+log_provenance: "backfilled — reconstructed from session close-out summary, not generated live"
+
+operating_model:
+  sql_execution: "autonomous via Claude Code (unchanged from Demo 2-3)"
+  ddl_approval: "required — obtained for the data changes described below"
+  output_format: "dual-language (engineering + business) on all significant findings"
+  session_primer: DEMO4_SESSION_PRIMER.md
+  active_session_marker:
+    convention: PN001
+    first_real_use: true
+    outcome: >
+      Worked as intended. Marker written at session open, cleared at
+      close. No parallel-session conflict. Audit trail preserved in
+      the registry. No revision needed to the convention itself.
+
+# ──────────────────────────────────────────────────────────────
+# OI008 — Multi-Condition At-Risk Test Customer (CLOSED)
+# ──────────────────────────────────────────────────────────────
+oi008_multi_condition_risk_reason:
+  status: CLOSED
+  closed_date: 2026-06-16
+  approach: >
+    Modified existing customer C012 ManufaCT rather than adding a
+    16th customer — preserves the 15-row spine (BR001) and avoids
+    disturbing any benchmark that depends on total_rows = 15.
+  change_made: >
+    Inserted ticket TKT-5026 for C012 ManufaCT — an open critical
+    ticket. C012 already had a low AVG_SATISFACTION_SCORE (2.0,
+    fires A001 condition c). The new ticket additionally fires A001
+    condition a (HAS_OPEN_CRITICAL_TICKET = TRUE).
+  result:
+    customer_id: C012
+    company: ManufaCT
+    conditions_fired: ["A001(a)", "A001(c)"]
+    risk_reason_value: "Open critical ticket | Low satisfaction score"
+    verified_in: ["ANALYTICS.CUSTOMER_360 (view)", "analytics.customer_360_mart"]
+  regression_test_extended:
+    file: dbt/tests/br003_known_at_risk_customers.sql
+    additions:
+      - customer: C012
+        assertion_type: "exact-string, multi-condition"
+        expected_risk_reason: "Open critical ticket | Low satisfaction score"
+      - customer: C013
+        assertion_type: "exact-string, single-condition"
+        expected_risk_reason: "Open critical ticket"
+        purpose: "confirms no stray ' | ' separator on the single-condition path"
+  test_results:
+    total_tests: 64
+    passed: 63
+    failed: 1
+    failed_test: "freshness_mart_refreshed_within_65_minutes"
+    failure_reason: "OI001 scheduler gap — pre-existing, unrelated to OI008"
+
+# ──────────────────────────────────────────────────────────────
+# OI005 — Case-Folding Sub-Finding (RESOLVED)
+# ──────────────────────────────────────────────────────────────
+oi005_case_folding_subfinding:
+  status: RESOLVED
+  resolved_date: 2026-06-16
+  root_cause: >
+    dbt/profiles.yml specified "schema: analytics" (lowercase), while
+    DuckDB stores the schema as "ANALYTICS" (uppercase) in
+    information_schema. dbt's load_cached_relation logic found an
+    approximate case-insensitive match and refused to proceed,
+    surfacing as a compilation/relation-resolution issue.
+  fix_applied: >
+    One-line config change in profiles.yml: "schema: analytics" ->
+    "schema: ANALYTICS". Config-only — no DDL, no data risk.
+  retrospective_note: >
+    The Demo 3 DROP TABLE + dbt run recreate (logged as the
+    side_effect_case_mismatch finding in the Demo 3 registry entry)
+    is now understood to have been a one-off workaround that treated
+    the symptom, not the cause. Without this profiles.yml fix, the
+    same DROP+recreate pattern would have recurred on the next
+    scheduled dbt run. This session closes the underlying cause
+    properly.
+  general_guidance_produced: >
+    When migrating to or operating against a second platform, align
+    profiles.yml's configured schema/table casing to whatever that
+    platform actually stores in information_schema — do not assume
+    a casing convention transfers between platforms. Relevant
+    whenever OI005 (multi-platform migration) itself resumes.
+  relationship_to_oi005: >
+    This is a sub-finding under OI005, not a closure of OI005 itself.
+    OI005 (multi-platform migration) remains OPEN, blocked by OI010.
+
+# ──────────────────────────────────────────────────────────────
+# PROCESS FINDING — PF-DEMO4-01 (NEW)
+# ──────────────────────────────────────────────────────────────
+process_finding_pf_demo4_01:
+  finding_id: PF-DEMO4-01
+  title: "Inline-composition bug in load-bearing edits"
+  date: 2026-06-16
+  description: >
+    Composing edit replacement text from memory/inline within a tool
+    call — rather than sourcing it from an already-verified file or
+    scratch file — silently reintroduced a previously-fixed logic
+    error. Occurred identically twice in this session, on the same
+    test-file edit, even immediately after the correct version had
+    been shown and confirmed.
+  resolution: >
+    Enforced scratch-file-first discipline: write intended content to
+    a scratch file, read it back to verify, then copy verbatim to the
+    real target — never retype or recompose inline.
+  standing_recommendation: >
+    Applies to any edit where logic or exact-string matching is
+    load-bearing — test assertions, registry YAML, SQL WHERE clauses,
+    config values — regardless of edit size. The originating near-miss
+    in this session was on a small edit, not a large one, so size is
+    not a reliable signal for when this discipline is needed.
+  related_findings:
+    - "PF-DEMO3-01 (display truncation)"
+    - "PF-DEMO3-02 (genuine content duplication during registry edits)"
+  classification: >
+    Same family as PF-DEMO3-01/02 — verification-discipline findings
+    about not trusting freshly-composed or freshly-displayed content
+    without a read-back step against a known-good source.
+  logged_in: "framework/PROJECT_REGISTRY.md, Process Notes (Cross-Effort)"
+
+# ──────────────────────────────────────────────────────────────
+# dbt REPO SYNC GAP — Found and Resolved
+# ──────────────────────────────────────────────────────────────
+dbt_repo_sync_gap:
+  finding: >
+    The git-tracked projects/c360/dbt/ was found to be missing exactly
+    2 files that had changed in the live working copy
+    (G:\Projects\DE-Intelligence\dbt\): profiles.yml and
+    tests/br003_known_at_risk_customers.sql. Not broadly stale —
+    specifically behind by this session's own changes, which had not
+    yet been copied over.
+  resolution: >
+    Targeted 2-file copy performed. Added a new .gitignore under
+    projects/c360/dbt/ excluding dbt_packages/ (regenerable dependency,
+    analogous to node_modules), logs/, target/, package-lock.yml, and
+    .user.yml (runtime artifacts that should never be committed).
+  commits:
+    - hash: e8fbf51
+      content: "Registry and narrative updates (OI008 closure, PF-DEMO4-01, case-folding resolution)"
+    - hash: 8bb66a1
+      content: "dbt source sync (2 files) + new .gitignore"
+  open_followup_for_demo5: >
+    Decide the long-term sync mechanism between the live working copy
+    and the repo path: (a) continue manual copy at session close,
+    (b) symlink/junction, or (c) run dbt directly from the repo path
+    to eliminate the dual-copy problem entirely. Flagged as Demo 5's
+    Workstream 1.
+
+# ──────────────────────────────────────────────────────────────
+# BENCHMARKS — CONFIRMED STABLE (customer-level), TICKET COUNT CHANGED
+# ──────────────────────────────────────────────────────────────
+benchmarks:
+  total_rows: 15
+  note: >
+    Customer count unchanged — Demo 4 added a support ticket
+    (TKT-5026), not a new customer. SUPPORT_TICKETS row count
+    increased from 25 to 26 as a result.
+  at_risk_count: 2
+  at_risk_customers:
+    - id: C013
+      company: BankWest
+      risk_reason: "Open critical ticket"
+      conditions_fired: 1
+    - id: C012
+      company: ManufaCT
+      risk_reason: "Open critical ticket | Low satisfaction score"
+      conditions_fired: 2
+      note: "Changed this session — previously fired only condition (c)"
+  portfolio_value_usd: 1986450
+  null_satisfaction_count: 1
+  null_satisfaction_customer: "C007 Logistix (correct by design, BR004)"
+  high_value_count: 3
+  high_value_customers: ["C013 BankWest (23.0%)", "C004 FinServ Corp (15.6%)", "C010 InsureNet (15.3%)"]
+
+# ──────────────────────────────────────────────────────────────
+# NEXT SESSION RECOMMENDATIONS
+# ──────────────────────────────────────────────────────────────
+next_session:
+  session: DEMO5
+  workstreams:
+    - "dbt sync mechanism decision (Workstream 1)"
+    - "OI003 — Great Expectations suite for RAW_DATA (Workstream 2, if time allows)"
+    - "OI005 Phase 1 — Snowflake full-refresh migration (Workstream 3)"
+  scoping_note: >
+    OI005 Phase 1 (full-refresh) is explicitly distinct from closing
+    OI005 overall. True incremental remains blocked by OI010.
+  primer: DEMO5_SESSION_PRIMER.md
+  primer_location: 'C:\Users\jmalv\projects\de-intelligence-kit\projects\demo5\DEMO5_SESSION_PRIMER.md'

@@ -1,540 +1,382 @@
-# PROJECT\_REGISTRY.md — Data Engineering Assistant
-
+# PROJECT_REGISTRY.md — Data Engineering Assistant
 ## Modern Prometheus | Session-Persistent Project Memory
 
 ---
 
 ## Registry Format
 
-Each project entry is a self-contained block. Copy the template for each new project. Update in-place as projects evolve. The registry is the source of truth between sessions.
+Each project entry is a self-contained block. Copy the template for each new project.
+Update in-place as projects evolve. The registry is the source of truth between sessions.
 
 ---
 
 ## Template
 
+```yaml
 project:
-
   id: PROJ-XXX
-
-  name: "\[Human-readable project name\]"
-
+  name: "[Human-readable project name]"
   status: active | paused | complete | blocked
-
   created: YYYY-MM-DD
+  last_updated: YYYY-MM-DD
 
-  last\_updated: YYYY-MM-DD
-
-  description: \>
-
-    \[One paragraph: what this project does and why it exists.
-
-    Written so both an engineer and an executive can orient quickly.\]
+  description: >
+    [One paragraph: what this project does and why it exists.
+    Written so both an engineer and an executive can orient quickly.]
 
   stakeholders:
+    business_owner: "[Name / Team]"
+    technical_lead: "[Name]"
+    consumers: ["[Team or system that uses this data]"]
 
-    business\_owner: "\[Name / Team\]"
+  data_sources:
+    - name: "[Source system name]"
+      type: "database | api | file | event_stream | saas"
+      connector: "[Fivetran / Airbyte / custom / etc.]"
+      ingestion_pattern: "full_refresh | incremental | cdc"
+      freshness_sla: "[e.g., every 6 hours]"
+      pii_present: true | false
+      notes: "[anything unusual]"
 
-    technical\_lead: "\[Name\]"
-
-    consumers: \["\[Team or system that uses this data\]"\]
-
-  data\_sources:
-
-    \- name: "\[Source system name\]"
-
-      type: "database | api | file | event\_stream | saas"
-
-      connector: "\[Fivetran / Airbyte / custom / etc.\]"
-
-      ingestion\_pattern: "full\_refresh | incremental | cdc"
-
-      freshness\_sla: "\[e.g., every 6 hours\]"
-
-      pii\_present: true | false
-
-      notes: "\[anything unusual\]"
-
-  schema\_contracts:
-
-    \- table: "\[schema.table\_name\]"
-
+  schema_contracts:
+    - table: "[schema.table_name]"
       version: "v1"
+      owner: "[team]"
+      breaking_change_approval_required: true | false
+      last_reviewed: YYYY-MM-DD
+      downstream_consumers:
+        - "[report / dashboard / API / model name]"
 
-      owner: "\[team\]"
-
-      breaking\_change\_approval\_required: true | false
-
-      last\_reviewed: YYYY-MM-DD
-
-      downstream\_consumers:
-
-        \- "\[report / dashboard / API / model name\]"
-
-  dbt\_models:
-
+  dbt_models:
     staging:
-
-      \- model: "stg\_\[source\]\_\_\[entity\]"
-
+      - model: "stg_[source]__[entity]"
         materialization: view
-
-        tests\_passing: true | false
-
-        business\_rule\_ids: \[\]
-
+        tests_passing: true | false
+        business_rule_ids: []
     intermediate:
-
-      \- model: "int\_\[domain\]\_\_\[transformation\]"
-
+      - model: "int_[domain]__[transformation]"
         materialization: table | incremental
-
-        tests\_passing: true | false
-
-        business\_rule\_ids: \[\]
-
+        tests_passing: true | false
+        business_rule_ids: []
     marts:
-
-      \- model: "fct\_\[entity\] | dim\_\[entity\] | mart\_\[team\]\_\_\[subject\]"
-
+      - model: "fct_[entity] | dim_[entity] | mart_[team]__[subject]"
         materialization: table
+        tests_passing: true | false
+        business_rule_ids: []
 
-        tests\_passing: true | false
+  quality_gates:
+    ge_suite: "[project].[dataset].[layer].expectations"
+    gate_placement: "[where in the DAG quality is enforced]"
+    failure_behavior: "block | alert | log"
+    last_run_status: passing | failing | unknown
+    sla_freshness: "[max acceptable staleness]"
 
-        business\_rule\_ids: \[\]
-
-  quality\_gates:
-
-    ge\_suite: "\[project\].\[dataset\].\[layer\].expectations"
-
-    gate\_placement: "\[where in the DAG quality is enforced\]"
-
-    failure\_behavior: "block | alert | log"
-
-    last\_run\_status: passing | failing | unknown
-
-    sla\_freshness: "\[max acceptable staleness\]"
-
-  business\_rules:
-
-    \- rule\_id: BR001
-
-      statement: "\[Exact business rule as stated by the business owner\]"
-
-      source: "\[Who stated it / which document\]"
-
+  business_rules:
+    - rule_id: BR001
+      statement: "[Exact business rule as stated by the business owner]"
+      source: "[Who stated it / which document]"
       captured: YYYY-MM-DD
+      implemented_in: "[model name or TBD]"
+      conflicts_with: NONE | [rule_id]
 
-      implemented\_in: "\[model name or TBD\]"
-
-      conflicts\_with: NONE | \[rule\_id\]
-
-  architecture\_decisions:
-
-    \- decision\_id: ADR001
-
+  architecture_decisions:
+    - decision_id: ADR001
       date: YYYY-MM-DD
-
-      decision: "\[What was decided\]"
-
-      rationale\_engineering: "\[Technical reasoning\]"
-
-      rationale\_business: "\[Business reasoning in plain language\]"
-
-      alternatives\_considered: "\[What else was evaluated\]"
-
-      made\_by: "\[Who made the call\]"
+      decision: "[What was decided]"
+      rationale_engineering: "[Technical reasoning]"
+      rationale_business: "[Business reasoning in plain language]"
+      alternatives_considered: "[What else was evaluated]"
+      made_by: "[Who made the call]"
 
   lineage:
-
-    critical\_paths:
-
-      \- path: "\[source\] → \[staging\] → \[intermediate\] → \[mart\] → \[consumer\]"
-
-        risk\_level: high | medium | low
-
-        notes: "\[any fragility or known issues\]"
-
+    critical_paths:
+      - path: "[source] → [staging] → [intermediate] → [mart] → [consumer]"
+        risk_level: high | medium | low
+        notes: "[any fragility or known issues]"
     gaps:
+      - column: "[column name]"
+        table: "[table name]"
+        status: unresolved | under_investigation | resolved
+        notes: "[context]"
 
-      \- column: "\[column name\]"
-
-        table: "\[table name\]"
-
-        status: unresolved | under\_investigation | resolved
-
-        notes: "\[context\]"
-
-  open\_items:
-
-    \- id: OI001
-
+  open_items:
+    - id: OI001
       priority: high | medium | low
+      description: "[What needs to be done]"
+      owner: "[Who / TBD]"
+      blocked_by: "[dependency or NONE]"
 
-      description: "\[What needs to be done\]"
+  cross_project_dependencies:
+    - depends_on_project: "[project name]"
+      dependency_type: "shares_source | consumes_model | shares_business_rule"
+      notes: "[specifics]"
 
-      owner: "\[Who / TBD\]"
-
-      blocked\_by: "\[dependency or NONE\]"
-
-  cross\_project\_dependencies:
-
-    \- depends\_on\_project: "\[project name\]"
-
-      dependency\_type: "shares\_source | consumes\_model | shares\_business\_rule"
-
-      notes: "\[specifics\]"
-
-  session\_log:
-
-    \- date: YYYY-MM-DD
-
-      summary: "\[What was done this session\]"
-
-      rules\_captured: \[\]
-
-      decisions\_made: \[\]
-
-      next\_session\_start: "\[recommended first action\]"
+  session_log:
+    - date: YYYY-MM-DD
+      summary: "[What was done this session]"
+      rules_captured: []
+      decisions_made: []
+      next_session_start: "[recommended first action]"
+```
 
 ---
 
 ## Example: Populated Project Entry
 
+```yaml
 project:
-
   id: PROJ-001
-
   name: "Revenue Analytics Pipeline"
-
   status: active
-
   created: 2025-06-01
+  last_updated: 2025-06-02
 
-  last\_updated: 2025-06-02
-
-  description: \>
-
+  description: >
     End-to-end pipeline from Salesforce CRM and Stripe billing into a unified
-
     revenue mart. Powers the CFO dashboard and quarterly board reporting.
-
     This is mission-critical — any data quality failure here reaches the board.
 
   stakeholders:
+    business_owner: "CFO / Finance Team"
+    technical_lead: "Martin"
+    consumers: ["CFO Dashboard", "Board Reporting Package", "FP&A Models"]
 
-    business\_owner: "CFO / Finance Team"
-
-    technical\_lead: "Martin"
-
-    consumers: \["CFO Dashboard", "Board Reporting Package", "FP\&A Models"\]
-
-  data\_sources:
-
-    \- name: "Salesforce"
-
+  data_sources:
+    - name: "Salesforce"
       type: saas
-
       connector: Fivetran
-
-      ingestion\_pattern: incremental
-
-      freshness\_sla: "every 4 hours"
-
-      pii\_present: true
-
+      ingestion_pattern: incremental
+      freshness_sla: "every 4 hours"
+      pii_present: true
       notes: "Opportunity stage history is critical — don't drop historical records"
 
-    \- name: "Stripe"
-
+    - name: "Stripe"
       type: api
-
       connector: Fivetran
-
-      ingestion\_pattern: incremental
-
-      freshness\_sla: "every 1 hour"
-
-      pii\_present: true
-
+      ingestion_pattern: incremental
+      freshness_sla: "every 1 hour"
+      pii_present: true
       notes: "Stripe events can arrive out of order — idempotency required"
 
-  schema\_contracts:
-
-    \- table: "revenue.fct\_recognized\_revenue"
-
+  schema_contracts:
+    - table: "revenue.fct_recognized_revenue"
       version: "v2"
-
       owner: "Finance Team"
+      breaking_change_approval_required: true
+      last_reviewed: 2025-05-15
+      downstream_consumers:
+        - "CFO Dashboard (Looker)"
+        - "Board Pack (Google Slides automation)"
+        - "int_finance__arr_waterfall"
 
-      breaking\_change\_approval\_required: true
-
-      last\_reviewed: 2025-05-15
-
-      downstream\_consumers:
-
-        \- "CFO Dashboard (Looker)"
-
-        \- "Board Pack (Google Slides automation)"
-
-        \- "int\_finance\_\_arr\_waterfall"
-
-  dbt\_models:
-
+  dbt_models:
     staging:
-
-      \- model: "stg\_salesforce\_\_opportunities"
-
+      - model: "stg_salesforce__opportunities"
         materialization: view
-
-        tests\_passing: true
-
-        business\_rule\_ids: \[BR001, BR002\]
-
-      \- model: "stg\_stripe\_\_charges"
-
+        tests_passing: true
+        business_rule_ids: [BR001, BR002]
+      - model: "stg_stripe__charges"
         materialization: view
-
-        tests\_passing: true
-
-        business\_rule\_ids: \[BR003\]
-
+        tests_passing: true
+        business_rule_ids: [BR003]
     intermediate:
-
-      \- model: "int\_revenue\_\_recognized\_by\_period"
-
+      - model: "int_revenue__recognized_by_period"
         materialization: incremental
-
-        tests\_passing: true
-
-        business\_rule\_ids: \[BR001, BR004\]
-
+        tests_passing: true
+        business_rule_ids: [BR001, BR004]
     marts:
-
-      \- model: "fct\_recognized\_revenue"
-
+      - model: "fct_recognized_revenue"
         materialization: table
+        tests_passing: true
+        business_rule_ids: [BR001, BR002, BR003, BR004]
 
-        tests\_passing: true
+  quality_gates:
+    ge_suite: "revenue.recognized_revenue.mart.expectations"
+    gate_placement: "Post-mart build, pre-dashboard refresh"
+    failure_behavior: block
+    last_run_status: passing
+    sla_freshness: "Mart must be no older than 6 hours at 6am ET daily"
 
-        business\_rule\_ids: \[BR001, BR002, BR003, BR004\]
-
-  quality\_gates:
-
-    ge\_suite: "revenue.recognized\_revenue.mart.expectations"
-
-    gate\_placement: "Post-mart build, pre-dashboard refresh"
-
-    failure\_behavior: block
-
-    last\_run\_status: passing
-
-    sla\_freshness: "Mart must be no older than 6 hours at 6am ET daily"
-
-  business\_rules:
-
-    \- rule\_id: BR001
-
-      statement: \>
-
+  business_rules:
+    - rule_id: BR001
+      statement: >
         Revenue is recognized in the period the contract starts, not when
-
         it is invoiced. A deal closed in June with a July 1 start date
-
         counts as July revenue.
-
       source: "CFO (verbal, confirmed in Slack thread 2025-05-20)"
-
       captured: 2025-05-20
+      implemented_in: "int_revenue__recognized_by_period"
+      conflicts_with: NONE
 
-      implemented\_in: "int\_revenue\_\_recognized\_by\_period"
-
-      conflicts\_with: NONE
-
-    \- rule\_id: BR002
-
-      statement: \>
-
-        An opportunity is 'closed-won' only when both CRM stage \= 'Closed Won'
-
+    - rule_id: BR002
+      statement: >
+        An opportunity is 'closed-won' only when both CRM stage = 'Closed Won'
         AND a corresponding Stripe charge exists. CRM alone is insufficient.
-
       source: "VP Revenue Operations, 2025-05-22"
-
       captured: 2025-05-22
+      implemented_in: "stg_salesforce__opportunities (join validation)"
+      conflicts_with: NONE
 
-      implemented\_in: "stg\_salesforce\_\_opportunities (join validation)"
-
-      conflicts\_with: NONE
-
-    \- rule\_id: BR003
-
-      statement: \>
-
+    - rule_id: BR003
+      statement: >
         Stripe refunds within 30 days of charge reduce the original period's
-
         revenue. Refunds after 30 days are recorded as a separate negative
-
         line item in the refund period.
-
       source: "Finance Policy Doc v3.2"
-
       captured: 2025-05-25
+      implemented_in: "stg_stripe__charges"
+      conflicts_with: NONE
 
-      implemented\_in: "stg\_stripe\_\_charges"
-
-      conflicts\_with: NONE
-
-    \- rule\_id: BR004
-
-      statement: \>
-
-        ARR is calculated as MRR × 12\. MRR is the sum of all active
-
+    - rule_id: BR004
+      statement: >
+        ARR is calculated as MRR × 12. MRR is the sum of all active
         subscription charges in a calendar month, excluding one-time fees.
-
       source: "CFO Dashboard spec, 2025-04-01"
-
       captured: 2025-04-01
+      implemented_in: "int_finance__arr_waterfall"
+      conflicts_with: NONE
 
-      implemented\_in: "int\_finance\_\_arr\_waterfall"
-
-      conflicts\_with: NONE
-
-  architecture\_decisions:
-
-    \- decision\_id: ADR001
-
+  architecture_decisions:
+    - decision_id: ADR001
       date: 2025-05-20
-
       decision: "Use incremental materialization for recognized revenue intermediate model"
-
-      rationale\_engineering: \>
-
+      rationale_engineering: >
         Historical revenue periods are immutable. Incremental with
-
-        unique\_key on (opportunity\_id, period\_month) prevents full scans
-
+        unique_key on (opportunity_id, period_month) prevents full scans
         of 3+ years of history on every run.
-
-      rationale\_business: \>
-
-        Reduces dashboard refresh time from \~45 minutes to \~4 minutes.
-
+      rationale_business: >
+        Reduces dashboard refresh time from ~45 minutes to ~4 minutes.
         The CFO does not want to wait 45 minutes to see yesterday's numbers.
-
-      alternatives\_considered: "Table materialization (too slow), View (no tests possible)"
-
-      made\_by: "Martin"
+      alternatives_considered: "Table materialization (too slow), View (no tests possible)"
+      made_by: "Martin"
 
   lineage:
-
-    critical\_paths:
-
-      \- path: "Salesforce → stg\_salesforce\_\_opportunities → int\_revenue\_\_recognized\_by\_period → fct\_recognized\_revenue → CFO Dashboard"
-
-        risk\_level: high
-
+    critical_paths:
+      - path: "Salesforce → stg_salesforce__opportunities → int_revenue__recognized_by_period → fct_recognized_revenue → CFO Dashboard"
+        risk_level: high
         notes: "Any break here fails the board pack. Alert immediately."
-
-      \- path: "Stripe → stg\_stripe\_\_charges → int\_revenue\_\_recognized\_by\_period → fct\_recognized\_revenue"
-
-        risk\_level: high
-
+      - path: "Stripe → stg_stripe__charges → int_revenue__recognized_by_period → fct_recognized_revenue"
+        risk_level: high
         notes: "Stripe out-of-order events handled by deduplication in staging"
-
     gaps:
-
-      \- column: "opportunity.original\_created\_by"
-
-        table: "stg\_salesforce\_\_opportunities"
-
+      - column: "opportunity.original_created_by"
+        table: "stg_salesforce__opportunities"
         status: unresolved
-
         notes: "Salesforce API does not expose this reliably. Flagged for governance review."
 
-  open\_items:
-
-    \- id: OI001
-
+  open_items:
+    - id: OI001
       priority: high
-
       description: "Add column-level PII masking for Stripe customer email in staging"
-
       owner: "Martin"
+      blocked_by: NONE
 
-      blocked\_by: NONE
-
-    \- id: OI002
-
+    - id: OI002
       priority: medium
-
       description: "Define Great Expectations suite for Stripe charges staging model"
-
       owner: TBD
+      blocked_by: NONE
 
-      blocked\_by: NONE
-
-  cross\_project\_dependencies:
-
-    \- depends\_on\_project: "Customer Data Platform"
-
-      dependency\_type: "shares\_source"
-
+  cross_project_dependencies:
+    - depends_on_project: "Customer Data Platform"
+      dependency_type: "shares_source"
       notes: "Both projects read from Salesforce via the same Fivetran connector. Schema changes in Salesforce affect both."
 
-  session\_log:
-
-    \- date: 2025-06-01
-
+  session_log:
+    - date: 2025-06-01
       summary: "Initial project setup. Captured BR001-BR004. Designed pipeline topology. Created ADR001."
-
-      rules\_captured: \[BR001, BR002, BR003, BR004\]
-
-      decisions\_made: \[ADR001\]
-
-      next\_session\_start: "Review Stripe staging model and scaffold Great Expectations suite (OI002)"
-
+      rules_captured: [BR001, BR002, BR003, BR004]
+      decisions_made: [ADR001]
+      next_session_start: "Review Stripe staging model and scaffold Great Expectations suite (OI002)"
+```
 ---
 
 ## Process Notes (Cross-Effort)
 
-Lessons about HOW sessions operate across all efforts under this framework — not project-specific facts (those belong in each effort's own registry). Log here when a session reveals something about process, tooling, or operating discipline that future sessions — in any effort — should know.
+Lessons about HOW sessions operate across all efforts under this 
+framework — not project-specific facts (those belong in each 
+effort's own registry). Log here when a session reveals something 
+about process, tooling, or operating discipline that future sessions 
+— in any effort — should know.
 
-process\_notes:
-
-  \- note\_id: PN001
-
+```yaml
+process_notes:
+  - note_id: PN001
     date: 2026-06-13
-
     title: "Parallel sessions against a shared live database"
-
-    statement: \>
-
+    statement: >
       Running parallel chats/sessions that can execute changes 
-
       (not just plan) against the same live database risks 
-
       redundant or conflicting work. No actual conflict occurred 
-
       in the incident that surfaced this (one session completed 
-
       before the other executed anything), but it was a near-miss.
-
-    mitigation: \>
-
+    mitigation: >
       Before starting a session that will execute changes, check 
-
-      the relevant project registry for an active\_session marker. 
-
-      Set one at session start (chat name \+ timestamp), clear it 
-
+      the relevant project registry for an active_session marker. 
+      Set one at session start (chat name + timestamp), clear it 
       at session close.
-
     source: "Martin Alvarez — Demo 3 parallel-session incident, PROJ-C360"
+    applies_to: "All efforts under Data Engineering Intelligence"
+    status: >
+      Adopted and validated — first real use in Demo 4 (2026-06-16, PROJ-C360).
+      Marker written at session open, cleared at close. No parallel-session
+      conflict, audit trail preserved in the registry, no revision needed
+      to the convention itself.
 
-    applies\_to: "All efforts under Data Engineering Intelligence"
+  - note_id: PF-DEMO4-01
+    date: 2026-06-16
+    title: "Inline-composition bug in load-bearing edits"
+    statement: >
+      Composing edit replacement text from memory/inline within a tool
+      call — rather than sourcing it from an already-verified file or
+      scratch file — can silently reintroduce previously-fixed logic
+      errors, even immediately after the correct version was shown and
+      confirmed. Occurred identically twice in Demo 4 on the same
+      test-file edit (PROJ-C360, OI008 work).
+    mitigation: >
+      Enforce scratch-file-first discipline for any edit where logic or
+      exact-string matching is load-bearing: test assertions, registry
+      YAML, SQL WHERE clauses, and similar. Write intended content to a
+      scratch file, read it back to verify, then copy verbatim to the
+      real target — never retype or recompose inline. This applies
+      regardless of edit size; the original near-miss was on a small,
+      not large, edit.
+    source: "Demo 4 session, PROJ-C360, 2026-06-16"
+    applies_to: "All efforts under Data Engineering Intelligence"
+    related: >
+      Distinct from PF-DEMO3-01/02 (display truncation / content
+      duplication during registry edits) though related in spirit —
+      all three are verification-discipline findings about not trusting
+      freshly-composed or freshly-displayed content without a read-back
+      step against a known-good source.
+    status: "Logged — scratch-file-first discipline now a standing recommendation"
 
-    status: "Logged — active\_session convention not yet formally adopted"
+  - note_id: PN002
+    date: 2026-06-16
+    title: "projects/demoN/ continuity-bridge convention has no enforcement check"
+    statement: >
+      The projects/demoN/ folder convention (a primer + session log per
+      demo session, mirroring projects/demo2/ and projects/demo3/) was
+      followed for Demo 2 and Demo 3 but silently skipped for Demo 4 —
+      no projects/demo4/ folder was created at session-close time. The
+      gap was not caught by the session itself, the close-out summary,
+      or the master roadmap chat's review of that summary; it surfaced
+      only when starting Demo 5 and noticing the folder was missing.
+    mitigation: >
+      No automated enforcement exists for this convention — it depends
+      entirely on the session (or its primer's close-out checklist)
+      remembering to create the folder. Recommend each future session
+      primer's "session close" instructions explicitly include
+      "create/update projects/demoN/ with this session's primer copy
+      and a session log" as its own numbered step, not just an implicit
+      assumption carried over from prior demos. The master roadmap chat
+      should also spot-check for the folder's existence when a session
+      reports its close-out summary, rather than only checking registry
+      and dashboard content.
+    source: "Martin Alvarez — noticed while starting Demo 5, PROJ-C360"
+    applies_to: "All efforts under Data Engineering Intelligence that adopt the projects/demoN/ pattern"
+    status: "Logged — projects/demo4/ backfilled retroactively (DEMO4_SESSION_LOG.yaml + primer copy); convention not yet given an enforcement mechanism"
+```
 
 ---
 
@@ -542,16 +384,22 @@ process\_notes:
 
 Use this section to track all active projects at a glance.
 
-**Caveat:** Each row below is a point-in-time snapshot, not a live-synced summary. The authoritative source for any project's current state is its own registry (e.g., `projects/c360/DEMO_REGISTRY.md` for PROJ-C360) — this table will drift as soon as that registry changes and is not guaranteed to be current. Updating the relevant row here is a recommended (not mandatory) step in each session's close-out, alongside that project's own registry update.
+> **Caveat:** Each row below is a point-in-time snapshot, not a live-synced
+> summary. The authoritative source for any project's current state is its
+> own registry (e.g., `projects/c360/DEMO_REGISTRY.md` for PROJ-C360) —
+> this table will drift as soon as that registry changes and is not
+> guaranteed to be current. Updating the relevant row here is a recommended
+> (not mandatory) step in each session's close-out, alongside that
+> project's own registry update.
 
+```markdown
 | ID       | Project Name                  | Status   | Last Updated | Critical Open Items |
-
 |----------|-------------------------------|----------|--------------|---------------------|
-
 | PROJ-001 | Revenue Analytics Pipeline    | active   | 2025-06-02   | OI001 (PII masking) |
-
-| PROJ-C360| Customer 360 — Source-to-Target Mapping (DE-Intelligence-Kit) | active | 2026-06-13 | OI010 (HIGH — ETL must set LOADED\_AT on UPDATE; blocks OI001 true-incremental and OI005 migration) |
+| PROJ-C360| Customer 360 — Source-to-Target Mapping (DE-Intelligence-Kit) | active | 2026-06-16 | OI010 (HIGH — ETL must set LOADED_AT on UPDATE; blocks OI001 true-incremental and OI005 migration). OI008 closed Demo 4. |
+```
 
 ---
 
-*PROJECT\_REGISTRY.md — Modern Prometheus Data Engineering Deployment* *The persistent memory layer. Update this every session. It outlives the context window.*  
+*PROJECT_REGISTRY.md — Modern Prometheus Data Engineering Deployment*
+*The persistent memory layer. Update this every session. It outlives the context window.*
