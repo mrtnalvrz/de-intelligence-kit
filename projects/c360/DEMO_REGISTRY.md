@@ -4,6 +4,18 @@
 
 ---
 
+## ACTIVE\_SESSION
+```
+session_id:   Demo4-OI008
+started_at:   2026-06-16T00:00:00-07:00
+operator:     Martin Alvarez (mrtnalvrz)
+focus:        OI008 — multi-condition at-risk test customer (no DDL required)
+status:       CLEARED — session Demo4-OI008 closed 2026-06-16
+```
+*Clear this block at session close per PN001 convention.*
+
+---
+
 project:
 
   id: PROJ-C360
@@ -1276,6 +1288,38 @@ project:
       table_name: customer_360_mart
       col_count: 40
       confirmed_via: information_schema.tables + information_schema.columns
+    demo3_fix_assessment: >
+      The Demo 3 resolution (DROP + recreate) was a one-off workaround, not a permanent fix.
+      After the DROP, dbt recreated the table using the profile schema 'analytics' (lowercase),
+      which DuckDB silently resolved to the existing ANALYTICS schema — reproducing the
+      identical mismatch. The next dbt run would have hit the same Compilation Error.
+    demo4_root_cause_and_permanent_fix:
+      identified: 2026-06-16
+      session: Demo4-OI008
+      approved_by: "Martin Alvarez"
+      root_cause: >
+        profiles.yml had 'schema: analytics' (lowercase). DuckDB stores the schema as
+        ANALYTICS (uppercase) in information_schema. dbt's load_cached_relation macro
+        found an approximate match and refused to guess, causing a Compilation Error on
+        every dbt run that found an existing mart table. The Demo 3 DROP + recreate
+        masked the symptom for one run but left the root cause intact.
+      fix_applied: "Changed profiles.yml from 'schema: analytics' to 'schema: ANALYTICS' — a config edit requiring no DDL and no DML."
+      fix_type: config_edit_no_ddl_no_dml
+      result: >
+        dbt run --select customer_360_mart resolved ANALYTICS.customer_360_mart by exact
+        match. PASS=1, ERROR=0, WARN=0. Future scheduled runs will match without
+        ambiguity because the profile schema now equals the stored schema name exactly.
+        No DROP was required and the existing table was never at risk.
+      status: CLOSED
+      oi005_update: >
+        [OI005 PLATFORM NOTE — RESOLVED] The identifier case-folding divergence first
+        logged in Demo 3 now has a confirmed root cause and a permanent config-level fix:
+        profiles.yml schema value must match the exact casing stored in the target
+        platform's information_schema. For this DuckDB instance: ANALYTICS (uppercase).
+        For OI005 platform migration targets — Redshift and PostgreSQL fold unquoted
+        identifiers to lowercase, Snowflake and Oracle fold to uppercase — the same
+        alignment rule applies: set profiles.yml schema to match what the platform
+        actually stores, not what feels natural to type.
 
   # ──────────────────────────────────────────────────────────────
   # OI006 FILES CHANGED
@@ -1400,5 +1444,108 @@ project:
       dbt: G:\Projects\DE-Intelligence\dbt\ (64 tests, 64 pass).
       dbt environment: Python 3.13.9, dbt-core 1.11.11, dbt-duckdb 1.10.1, DuckDB v1.5.3.
       BR001-BR011 registered. BR006 revised 2026-06-10. ADR001-ADR003 accepted.
+      Benchmarks: 15 rows, 2 at-risk, $1,986,450 portfolio, C007 null satisfaction.
+      HIGH_VALUE_FLAG: C013 BankWest (23.0%), C004 FinServ Corp (15.6%), C010 InsureNet (15.3%).
+
+  # ──────────────────────────────────────────────────────────────
+  # DEMO 4 — OI008 CLOSURE (2026-06-16)
+  # ──────────────────────────────────────────────────────────────
+  oi008_closure:
+    id: OI008
+    status: CLOSED
+    closed: 2026-06-16
+    session: Demo4-OI008
+    approved_by: "Martin Alvarez"
+
+    approach: option_a_modify_existing_customer
+    rationale: >
+      Modified C012 ManufaCT rather than inserting a 16th customer, preserving
+      the 15-row spine guarantee (BR001) and keeping the test dataset compact.
+
+    changes:
+      - object: RAW_DATA.SUPPORT_TICKETS
+        change: >
+          INSERT TKT-5026 (CUSTOMER_REF=C012, PRIORITY=critical, STATUS=open,
+          CATEGORY=billing, CREATED_AT=2024-03-15, SATISFACTION_SCORE=NULL,
+          LOADED_AT=CURRENT_TIMESTAMP). Approved DML, executed 2026-06-16.
+      - object: dbt/tests/br003_known_at_risk_customers.sql
+        change: >
+          Extended with exact RISK_REASON string assertions for both at-risk customers.
+          C012 must equal 'Open critical ticket | Low satisfaction score' (multi-condition
+          anchor). C013 must equal 'Open critical ticket' (single-condition clean-string
+          anchor, no stray ' | ' artifacts). Header comment updated to reflect C012's
+          new two-condition state and its role as the BR003 concatenation regression anchor.
+
+    verified_results:
+      view_ANALYTICS_CUSTOMER_360_C012:
+        HAS_OPEN_CRITICAL_TICKET: true
+        AVG_SATISFACTION_SCORE: 2.0
+        AT_RISK_FLAG: true
+        RISK_REASON: "Open critical ticket | Low satisfaction score"
+        TOTAL_TICKETS: 2
+        MOST_RECENT_TICKET_DATE: "2024-03-15 09:00:00"
+        MOST_RECENT_TICKET_CATEGORY: billing
+        MOST_RECENT_TICKET_STATUS: open
+      mart_ANALYTICS_CUSTOMER_360_MART_C012:
+        all_fields_match_view: true
+        REFRESHED_AT: "2026-06-16 09:50:15-07"
+      dbt_test_suite:
+        total: 64
+        passed: 63
+        failed: 1
+        failed_test: freshness_mart_refreshed_within_65_minutes
+        failure_reason: >
+          Pre-existing OI001 gap — no scheduler configured. Mart refreshed earlier
+          in session; test ran >65 minutes later. Unrelated to OI008.
+        br003_known_at_risk_customers: PASS
+
+    process_note:
+      title: "Inline-composition bug — two edit attempts reintroduced broken content"
+      description: >
+        Two attempts to edit br003_known_at_risk_customers.sql using inline-composed
+        content (new_string typed directly in the tool call) both staged a version
+        with a gating 'AND at_risk_flag = false' condition before the parenthesized
+        OR block, making the RISK_REASON assertions logically unreachable — defeating
+        OI008's purpose. The diff preview showed the broken structure but it was not
+        caught before submission.
+      resolution: >
+        Switched to scratch-file discipline: write intended content to a scratch file,
+        read it back with Get-Content -Encoding UTF8, confirm field-by-field, then
+        copy-to-target rather than retyping. Applied for br003 edit, the
+        DEMO_REGISTRY.md OI005 closure block, and the ACTIVE_SESSION status update.
+      standing_recommendation: >
+        For any test file, registry block, or multi-line SQL edit: compose in a
+        scratch file, verify via Get-Content read-back, copy to target. Do not
+        compose inline in the tool call for edits where logic or exact string
+        matching is load-bearing. This applies to small edits as well as large ones
+        — the br003 incident involved a WHERE clause, not a large block.
+      logged: 2026-06-16
+      session: Demo4-OI008
+
+  # ──────────────────────────────────────────────────────────────
+  # NEXT SESSION RECOMMENDATIONS (as of Demo 4 close)
+  # ──────────────────────────────────────────────────────────────
+  next_session_demo4:
+    recommended_first: OI008_test_hardening
+    rationale: >
+      OI008 closed. Consider whether to add a negative test — a customer that does NOT
+      fire multiple conditions should NOT have a pipe separator in RISK_REASON — to
+      complete the BR003 concatenation coverage. Alternatively, OI003 (Great Expectations
+      on RAW_DATA) is the next medium-priority open item with no blockers.
+    alternative_first: OI003
+    alternative_rationale: >
+      Great Expectations suite for RAW_DATA source layer — freshness, volume, and
+      referential integrity expectations on source tables as a complement to the dbt suite.
+    open_items_at_close: ["OI003", "OI004", "OI005 (blocked by OI010)", "OI007", "OI010"]
+    start_prompt: >
+      Resume PROJ-C360. OI001, OI002, OI006, OI008, OI009 closed. Open: OI003-OI005, OI007, OI010.
+      C012 ManufaCT now fires two A001 conditions (TKT-5026 open critical + CSAT 2.0).
+      RISK_REASON='Open critical ticket | Low satisfaction score' validated in view and mart.
+      br003_known_at_risk_customers.sql extended with exact RISK_REASON assertions (both customers).
+      profiles.yml schema casing fixed (ANALYTICS uppercase) — dbt runs clean, no DROP needed.
+      Database: G:\Projects\DE-Intelligence\mp_demo.db. 26 support tickets (was 25).
+      View: ANALYTICS.CUSTOMER_360 (v3, 39 cols). Mart: ANALYTICS.customer_360_mart (40 cols).
+      dbt: G:\Projects\DE-Intelligence\dbt\ (64 tests, 63 pass, 1 expected freshness failure).
+      BR001-BR011 registered. ADR001-ADR003 accepted.
       Benchmarks: 15 rows, 2 at-risk, $1,986,450 portfolio, C007 null satisfaction.
       HIGH_VALUE_FLAG: C013 BankWest (23.0%), C004 FinServ Corp (15.6%), C010 InsureNet (15.3%).
